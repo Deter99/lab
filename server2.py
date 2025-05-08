@@ -1,8 +1,14 @@
-from xmlrpc.server import SimpleXMLRPCServer
-def concatenate_strings(str1, str2):
-    return str1 + ' ' + str2
+import Pyro5.api
+from string_service import StringService
 
-server = SimpleXMLRPCServer(("localhost", 8000))
-print("Server is running on port 8000...")
-server.register_function(concatenate_strings, "concat")
-server.serve_forever()
+def main():
+    daemon = Pyro5.api.Daemon()  # Start Pyro daemon
+    ns = Pyro5.api.locate_ns()   # Locate the name server
+    uri = daemon.register(StringService)  # Register the object
+    ns.register("example.stringconcat", uri)  # Register object name in name server
+
+    print("StringService is ready.")
+    daemon.requestLoop()  # Start the event loop
+
+if __name__ == "__main__":
+    main()

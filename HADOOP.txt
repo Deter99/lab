@@ -1,0 +1,233 @@
+HADOOP
+
+WORD COUNT
+
+start-dfs.sh
+start-yarn.sh
+jps
+ls
+nano word.txt (After typing in nano txt file, Do Ctrl X, Then yes(Y),Then enter)
+
+cat word.txt
+hdfs dfs -ls /
+hdfs dfs -rm -r /input
+hdfs dfs -rm -r /output
+hdfs dfs mkdir -p /input
+hdfs dfs -ls /
+hdfs dfs -put word.txt /input/
+hdfs dfs -ls /input/
+
+whereis hadoop
+ls /usr/local/hadoop/
+ls usr/local/hadoop/share/
+ls usr/local/hadoop/share/hadoop/
+ls usr/local/hadoop/share/hadoop/mapreduce/
+
+hadoop jar /usr/local/hadoop/share/hadoop/mapreduce/hadoop-mapreduce-examples-3.3.4.jar wordcount /input /output
+
+hdfs dfs -ls /
+hdfs dfs -ls /output/
+hdfs dfs -ls /output/part-r-00000
+hdfs dfs -cat /output/part-r-00000
+stop-dfs.sh
+stop-yarn.sh
+
+------------------------------------------------------------------------------------------------------------------------------------------------------
+
+CHARACTER COUNT
+
+start-dfs.sh
+start-yarn.sh
+jps
+ls
+
+
+hdfs dfs -ls /
+hdfs dfs -rm -r /input
+hdfs dfs -rm -r /output
+hdfs dfs mkdir -p /input
+hdfs dfs -ls /
+nano character.txt (After typing in nano txt file, Do Ctrl X, Then yes(Y),Then enter)
+
+hdfs dfs -put character.txt /input/
+hdfs dfs -ls /input/
+nano mapper.py
+
+#####################################Mapper.py file:
+#!/usr/bin/env python3
+import sys
+
+for line in sys.stdin:
+    for char in line.strip():
+        print(f"{char}\t1")
+########################################################################
+
+
+nano reducer.py
+
+#######################################Reducer.py file:
+#!/usr/bin/env python3
+import sys
+from collections import defaultdict
+
+counts = defaultdict(int)
+
+for line in sys.stdin:
+    line = line.strip()
+    if not line:
+        continue  # skip empty lines
+    parts = line.split("\t")
+    if len(parts) != 2:
+        continue  # skip malformed lines
+    key, val = parts
+    try:
+        counts[key] += int(val)
+    except ValueError:
+        continue  # skip lines with non-integer values
+
+for key in sorted(counts):
+    print(f"{key}\t{counts[key]}")
+#######################################################################################
+
+
+chmod +x mapper.py
+chmod +x reducer.py
+
+whereis hadoop
+ls /usr/local/hadoop/
+ls /usr/local/hadoop/share/
+ls /usr/local/hadoop/share/hadoop/
+ls /usr/local/hadoop/share/hadoop/tools/
+ls /usr/local/hadoop/share/hadoop/tools/lib/
+ls /usr/local/hadoop/share/hadoop/tools/lib/hadoop-streaming-3.3.4.jar
+
+hdfs dfs -rm -r /output/character_output
+
+hadoop jar /usr/local/hadoop/share/hadoop/tools/lib/hadoop-streaming-3.3.4.jar / -input /input/character.txt \
+-output /output/character_output \
+-mapper mapper.py \
+-reducer reducer.py \
+-file mapper.py \
+-file reducer.py 
+
+hdfs dfs -ls /output/character_output/
+hdfs dfs -cat /output/character_output/part-00000
+
+stop-dfs.sh
+stop-yarn.sh
+
+------------------------------------------------------------------------------------------------------------------------------------------------------
+
+WEATHER DATA
+start-dfs.sh
+start-yarn.sh
+jps
+ls
+
+
+hdfs dfs -ls /
+hdfs dfs -rm -r /input /output
+hdfs dfs mkdir -p /input
+hdfs dfs -ls /
+nano weather.txt
+
+###############weather.txt file:
+Year,Month,Day,Max Temp (°C),Min Temp (°C),Rainfall (mm)
+1950,01,01,25,-18,43
+1950,01,02,26,-17,44
+1950,01,03,27,-12,32
+1950,01,04,28,-20,41
+1950,01,05,29,-13,40
+1950,01,06,30,-16,45
+1950,01,07,31,-14,33
+1950,01,08,32,-19,38
+1950,01,09,33,-20,28
+1950,01,10,34,-19,40    
+#############################################################
+
+hdfs dfs -put weather.txt /input/
+hdfs dfs -ls /input/
+nano mapper.py
+
+##############################Mapper.py file:
+#!/usr/bin/env python3
+import sys
+
+# Skip the header
+for idx, line in enumerate(sys.stdin):
+    if idx == 0:
+        continue  # Skip header
+    parts = line.strip().split(",")
+    if len(parts) != 6:
+        continue  # Skip malformed lines
+
+    year = parts[0]
+    try:
+        max_temp = float(parts[3])
+        min_temp = float(parts[4])
+    except ValueError:
+        continue  # Skip lines with non-numeric temperature
+
+    # Emit key-value pairs
+    print(f"{year}\t{max_temp},{min_temp},1")
+
+##################################################
+
+
+nano reducer.py
+
+######################################Reducer.py file:
+#!/usr/bin/env python3
+import sys
+
+from collections import defaultdict
+
+temp_data = defaultdict(lambda: [0, 0, 0])  # max_sum, min_sum, count
+
+for line in sys.stdin:
+    line = line.strip()
+    if not line:
+        continue
+    parts = line.split("\t")
+    if len(parts) != 2:
+        continue
+    year, values = parts
+    try:
+        max_temp, min_temp, count = map(float, values.split(","))
+        temp_data[year][0] += max_temp
+        temp_data[year][1] += min_temp
+        temp_data[year][2] += count
+    except ValueError:
+        continue
+
+# Output: Year -> avg max, avg min
+for year in sorted(temp_data):
+    max_sum, min_sum, count = temp_data[year]
+    avg_max = max_sum / count
+    avg_min = min_sum / count
+    print(f"{year}\tAvg Max Temp: {avg_max:.2f}, Avg Min Temp: {avg_min:.2f}")
+
+###########################################################################
+
+chmod +x mapper.py
+chmod +x reducer.py
+
+whereis hadoop
+ls /usr/local/hadoop/
+ls /usr/local/hadoop/share/
+ls /usr/local/hadoop/share/hadoop/
+ls /usr/local/hadoop/share/hadoop/tools/
+ls /usr/local/hadoop/share/hadoop/tools/lib/
+
+hadoop jar /usr/local/hadoop/share/hadoop/tools/lib/hadoop-streaming-3.3.4.jar / -input /input/weather.txt \
+-output /output/weather_output \
+-mapper mapper.py \
+-reducer reducer.py \
+-file mapper.py \
+-file reducer.py 
+
+hdfs dfs -ls /output/weather_output/
+hdfs dfs -cat /output/weather_output/part-00000
+
+stop-dfs.sh
+stop-yarn.sh
